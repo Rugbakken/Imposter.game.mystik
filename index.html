@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<title>Imposter Pro</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+
+<style>
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  background: linear-gradient(135deg, #141e30, #243b55);
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.container {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  padding: 30px;
+  border-radius: 20px;
+  width: 520px;
+  text-align: center;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+button {
+  padding: 10px 15px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #6a9cff, #7d5fff);
+  color: white;
+  cursor: pointer;
+  margin: 5px;
+}
+
+button:hover { transform: scale(1.05); }
+
+input {
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  margin: 5px;
+}
+
+.hidden { display: none; }
+
+label {
+  display: block;
+  margin: 3px;
+  cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Imposter Pro</h1>
+
+<div id="setup">
+
+<input id="playerName" placeholder="Navn">
+<button onclick="addPlayer()">Tilføj</button>
+<button onclick="clearPlayers()">Nulstil</button>
+
+<ul id="playerList"></ul>
+
+<h3>Kategorier</h3>
+
+<!-- ORIGINAL -->
+<label><input type="checkbox" value="film"> Film</label>
+<label><input type="checkbox" value="football"> Fodbold</label>
+<label><input type="checkbox" value="influencer"> Influencers</label>
+<label><input type="checkbox" value="gaming"> Gaming</label>
+<label><input type="checkbox" value="music"> Musik</label>
+<label><input type="checkbox" value="series"> Serier</label>
+<label><input type="checkbox" value="mixed"> Mixed</label>
+
+<!-- NYE -->
+<label><input type="checkbox" value="countries"> Lande</label>
+<label><input type="checkbox" value="animals2"> Dyr</label>
+<label><input type="checkbox" value="sports"> Sportsgrene</label>
+<label><input type="checkbox" value="food"> Mad</label>
+<label><input type="checkbox" value="jobs"> Jobs</label>
+
+<!-- RANDOM -->
+<label><input type="checkbox" value="random"> 🔥 Random</label>
+<label><input type="checkbox" value="randomHard"> ⚡ Random Hard</label>
+
+<h3>Sværhedsgrad</h3>
+<input type="range" min="1" max="3" value="2" id="difficulty">
+<p id="diffText">Medium</p>
+
+<h3>Antal impostere</h3>
+<input id="imposterInput" type="number" min="1" placeholder="fx 1">
+
+<button onclick="autoImposters()">Auto</button>
+<button onclick="startGame()">Start</button>
+
+</div>
+
+<div id="reveal" class="hidden">
+<h2 id="currentPlayer"></h2>
+
+<h3 id="secretWord" class="hidden"></h3>
+
+<button id="revealBtn" onclick="revealWord()">Vis ord</button>
+<button id="nextBtn" class="hidden" onclick="nextPlayer()">Næste spiller</button>
+</div>
+
+<div id="game" class="hidden">
+<h2>Beskriv jeres ord</h2>
+<button onclick="startVoting()">Afstemning</button>
+</div>
+
+<div id="voting" class="hidden">
+<h2>Hvem er anderledes?</h2>
+<div id="voteButtons"></div>
+</div>
+
+<div id="result" class="hidden">
+<h2 id="resultText"></h2>
+<p id="imposterList"></p>
+<button onclick="location.reload()">Spil igen</button>
+</div>
+
+</div>
+
+<script>
+
+// STATE
+let players = JSON.parse(localStorage.getItem("players")) || [];
+let revealIndex = 0;
+let imposters = [];
+let chosenPair;
+
+// SVÆRHED
+document.getElementById("difficulty").oninput = function() {
+  let txt = ["Let","Medium","Svær"];
+  document.getElementById("diffText").innerText = txt[this.value-1];
+};
+
+// WORD DB (kommer fra trin 2)
+
+let wordDB = {
+
+// 🎬 FILM
+film: {
+easy: [
+["Batman","Shrek"],["Harry Potter","Spider-Man"],
+["Elsa","Moana"],["Hulk","Shrek"],
+["Minions","Toy Story"],["Cars","Frozen"],
+["Avatar","Titanic"],["Joker","Deadpool"],
+["Thor","Hulk"],["Iron Man","Batman"],
+["Superman","Hulk"],["Aladdin","Simba"],
+["Buzz","Woody"],["Nemo","Dory"],
+["Shrek","Kung Fu Panda"],["Po","Donkey"],
+["Tarzan","Mowgli"],["Hercules","Aladdin"],
+["Rapunzel","Ariel"],["Belle","Cinderella"]
+],
+medium: [
+["Batman","Superman"],["Iron Man","Captain America"],
+["Thor","Loki"],["Harry Potter","Frodo"],
+["Gandalf","Dumbledore"],["Shrek","Fiona"],
+["Simba","Mufasa"],["Joker","Harley Quinn"],
+["Deadpool","Wolverine"],["Spider-Man","Venom"],
+["Elsa","Anna"],["Po","Tigress"],
+["Scar","Mufasa"],["Aladdin","Genie"],
+["Tarzan","Jane"],["Hercules","Zeus"],
+["Rapunzel","Flynn"],["Belle","Beast"],
+["Cinderella","Prince"],["Snow White","Prince"]
+],
+hard: [
+["Batman","Bruce Wayne"],["Superman","Clark Kent"],
+["Iron Man","Tony Stark"],["Spider-Man","Peter Parker"],
+["Harry Potter","Draco"],["Gandalf","Saruman"],
+["Frodo","Bilbo"],["Joker","Arthur"],
+["Deadpool","Wade"],["Wolverine","Logan"],
+["Venom","Eddie"],["Flash","Barry"],
+["Aquaman","Arthur"],["Simba","Nala"],
+["Elsa","Hans"],["Anna","Kristoff"],
+["Neo","Trinity"],["Morpheus","Oracle"],
+["John Wick","Winston"],["Luke","Anakin"]
+]
+},
+
+// ⚽ FOOTBALL
+football: {
+easy: [
+["Messi","Zlatan"],["Ronaldo","Benzema"],
+["Mbappé","Haaland"],["Neymar","Salah"],
+["De Bruyne","Kanté"],["Modric","Pogba"],
+["Ramos","Van Dijk"],["Buffon","Neuer"],
+["Iniesta","Xavi"],["Bale","Hazard"],
+["Rooney","Kane"],["Lewandowski","Suarez"],
+["Foden","Saka"],["Pedri","Gavi"],
+["Ødegaard","Eriksen"],["Sancho","Rashford"],
+["Sterling","Mahrez"],["Griezmann","Giroud"],
+["Kane","Son"],["Salah","Mané"]
+],
+medium: [
+["Messi","Ronaldo"],["Mbappé","Haaland"],
+["Xavi","Iniesta"],["Modric","Kroos"],
+["Kane","Haaland"],["Salah","Mané"],
+["Vinicius","Rodrygo"],["Pedri","Gavi"],
+["Ramos","Pique"],["Van Dijk","Dias"],
+["Alisson","Ederson"],["Neuer","Ter Stegen"],
+["Casemiro","Rodri"],["Kante","Rice"],
+["Bellingham","Valverde"],["Foden","Grealish"],
+["Mahrez","Sterling"],["Saka","Martinelli"],
+["Son","Kane"],["Griezmann","Benzema"]
+],
+hard: [
+["Xavi","Busquets"],["Iniesta","Silva"],
+["Modric","Valverde"],["Kroos","Scholes"],
+["Lampard","Gerrard"],["Beckham","Giggs"],
+["Henry","Bergkamp"],["Suarez","Cavani"],
+["Lewandowski","Kane"],["Haaland","Osimhen"],
+["Mbappé","Dembele"],["Neymar","Rodrygo"],
+["Vinicius","Sané"],["Salah","Mahrez"],
+["Mané","Son"],["De Bruyne","Ødegaard"],
+["Bellingham","Musiala"],["Pedri","Gavi"],
+["Casemiro","Rodri"],["Kanté","Rice"]
+]
+},
+
+// 🎮 GAMING
+gaming: {
+easy: [
+["Fortnite","Minecraft"],["GTA","FIFA"],
+["Call of Duty","Mario Kart"],["Roblox","Among Us"],
+["CSGO","Valorant"],["Clash Royale","Clash"],
+["Candy Crush","Subway Surfers"],["Pokemon","Zelda"],
+["Halo","DOOM"],["Overwatch","Paladins"],
+["Apex","Fortnite"],["PUBG","Warzone"],
+["FIFA","NBA 2K"],["Rocket League","FIFA"],
+["League","Dota"],["Skyrim","Fallout"],
+["Dark Souls","Elden Ring"],["Terraria","Minecraft"],
+["Among Us","Fall Guys"],["GTA","Red Dead"]
+],
+medium: [
+["Fortnite","Warzone"],["Minecraft","Terraria"],
+["GTA","Red Dead"],["CSGO","Valorant"],
+["League","Dota"],["FIFA","PES"],
+["Call of Duty","Battlefield"],["Overwatch","Valorant"],
+["Apex","Warzone"],["PUBG","Fortnite"],
+["Roblox","Minecraft"],["Clash Royale","Brawl Stars"],
+["Pokemon","Digimon"],["Zelda","Elden Ring"],
+["Skyrim","Witcher"],["Dark Souls","Elden Ring"],
+["Mario","Luigi"],["Sonic","Shadow"],
+["Halo","Destiny"],["DOOM","Quake"]
+],
+hard: [
+["CSGO","CS2"],["Valorant","Radiant"],
+["League","Challenger"],["Dota","Immortal"],
+["FIFA","Ultimate Team"],["COD","MW2"],
+["Warzone","DMZ"],["Apex","Ranked"],
+["Halo","Reach"],["Destiny","Destiny 2"],
+["DOOM","Eternal"],["Minecraft","Hardcore"],
+["Terraria","Hardmode"],["Roblox","Studio"],
+["Clash Royale","Arena 10"],["Brawl Stars","Power League"],
+["Pokemon","GO"],["Zelda","TOTK"],
+["Skyrim","Anniversary"],["Witcher","Witcher 3"]
+]
+},
+
+// 🎵 MUSIC
+music: {
+easy: [
+["Drake","Travis Scott"],["Taylor Swift","Billie Eilish"],
+["Kanye West","Jay-Z"],["Rihanna","Beyonce"],
+["Justin Bieber","Harry Styles"],["Ed Sheeran","Shawn Mendes"],
+["Ariana Grande","Dua Lipa"],["The Weeknd","Post Malone"],
+["Bruno Mars","The Weeknd"],["Coldplay","Imagine Dragons"],
+["Eminem","50 Cent"],["Snoop Dogg","Dr Dre"],
+["Lil Baby","Lil Durk"],["Central Cee","Dave"],
+["Stormzy","Skepta"],["Pop Smoke","Lil Tjay"],
+["Juice WRLD","XXX"],["Future","Uzi"],
+["Nicki","Cardi B"],["Doja Cat","Ice Spice"]
+],
+medium: [
+["Drake","Future"],["Travis","Don Toliver"],
+["Taylor Swift","Olivia"],["Billie","Lorde"],
+["Kanye","Kid Cudi"],["Jay-Z","Nas"],
+["Rihanna","SZA"],["Beyonce","Solange"],
+["Justin","Kid Laroi"],["Harry","Zayn"],
+["Ed Sheeran","Capaldi"],["Shawn","Charlie"],
+["Ariana","Doja"],["Dua Lipa","Raye"],
+["Weeknd","Bruno"],["Post","Quavo"],
+["Coldplay","Script"],["Imagine","OneRepublic"],
+["Eminem","Logic"],["50 Cent","Game"]
+],
+hard: [
+["Drake","OVO"],["Travis","Cactus Jack"],
+["Taylor","Eras"],["Billie","Finneas"],
+["Kanye","Yeezy"],["Jay-Z","Roc Nation"],
+["Rihanna","Fenty"],["Beyonce","Destiny"],
+["Justin","JB"],["Harry","1D"],
+["Ed","Divide"],["Shawn","Wonder"],
+["Ariana","Positions"],["Dua","Future Nostalgia"],
+["Weeknd","XO"],["Post","White Iverson"],
+["Eminem","Slim Shady"],["50","G Unit"],
+["Snoop","West Coast"],["Dr Dre","Aftermath"]
+]
+},
+
+// 🔀 MIXED
+mixed: {
+easy: [
+["iPhone","Pizza"],["Tesla","Nike"],
+["YouTube","Burger"],["Discord","Coke"],
+["Spotify","Football"],["Netflix","Pizza"],
+["Instagram","Shoes"],["Snapchat","Burger"],
+["TikTok","Dance"],["Laptop","TV"],
+["Mouse","Keyboard"],["Chair","Table"],
+["Car","Bike"],["Bus","Train"],
+["Plane","Boat"],["Sun","Moon"],
+["Rain","Snow"],["Beach","Mountain"],
+["Dog","Cat"],["Lion","Tiger"]
+],
+medium: [
+["iPhone","Samsung"],["Nike","Adidas"],
+["Tesla","BMW"],["YouTube","Twitch"],
+["Discord","Teams"],["Spotify","Apple Music"],
+["Netflix","HBO"],["Instagram","Snapchat"],
+["TikTok","Reels"],["Laptop","Tablet"],
+["Car","Motorcycle"],["Plane","Helicopter"],
+["Dog","Wolf"],["Lion","Leopard"],
+["Apple","Pear"],["Milk","Oat Milk"],
+["Burger","Sandwich"],["Cake","Pie"],
+["Coffee","Latte"],["Beer","Ale"]
+],
+hard: [
+["iPhone","Pro"],["Nike","Jordan"],
+["Tesla","Model S"],["YouTube","Shorts"],
+["Discord","Nitro"],["Spotify","Premium"],
+["Netflix","Originals"],["Instagram","Stories"],
+["TikTok","Live"],["Laptop","MacBook"],
+["Car","SUV"],["Plane","Jet"],
+["Dog","Puppy"],["Apple","Green Apple"],
+["Milk","Skim"],["Burger","Cheeseburger"],
+["Fries","Curly"],["Coffee","Espresso"],
+["Beer","Lager"],["Game","FPS"]
+]
+},
+
+// 🔥 EXTRA KATEGORIER (giver variation)
+animals: {
+easy: [["Lion","Tiger"],["Dog","Cat"],["Elephant","Rhino"],["Horse","Cow"],["Shark","Dolphin"],["Snake","Lizard"],["Eagle","Hawk"],["Frog","Toad"],["Bear","Wolf"],["Fox","Dog"],["Pig","Cow"],["Chicken","Duck"],["Goat","Sheep"],["Deer","Moose"],["Whale","Shark"],["Penguin","Bird"],["Ant","Bee"],["Spider","Ant"],["Fish","Shark"],["Cat","Lion"]],
+medium: [["Lion","Leopard"],["Dog","Wolf"],["Elephant","Mammoth"],["Horse","Donkey"],["Shark","Whale"],["Snake","Python"],["Eagle","Falcon"],["Frog","Salamander"],["Bear","Grizzly"],["Fox","Wolf"],["Pig","Boar"],["Chicken","Turkey"],["Goat","Ram"],["Deer","Reindeer"],["Whale","Orca"],["Penguin","Seal"],["Ant","Termite"],["Spider","Scorpion"],["Fish","Salmon"],["Cat","Tiger"]],
+hard: [["Lion","Cub"],["Dog","Puppy"],["Elephant","Calf"],["Horse","Foal"],["Shark","Great White"],["Snake","Cobra"],["Eagle","Golden Eagle"],["Bear","Polar Bear"],["Fox","Arctic Fox"],["Pig","Piglet"],["Chicken","Hen"],["Goat","Kid"],["Deer","Fawn"],["Whale","Blue Whale"],["Penguin","Emperor"],["Ant","Queen Ant"],["Spider","Black Widow"],["Fish","Tuna"],["Cat","Kitten"],["Wolf","Alpha"]]
+},
+
+// 🌍 LANDE
+countries: {
+easy: [
+["Danmark","Sverige"],["USA","Canada"],["Frankrig","Spanien"],
+["Tyskland","Holland"],["Italien","Portugal"],["Norge","Finland"],
+["Brasilien","Argentina"],["Japan","Kina"],["Indien","Pakistan"],
+["Mexico","USA"],["Australien","New Zealand"],["Egypten","Marokko"],
+["Tyrkiet","Grækenland"],["Polen","Tjekkiet"],["Ukraine","Rusland"],
+["Thailand","Vietnam"],["Filippinerne","Indonesien"],["Schweiz","Østrig"],
+["Belgien","Holland"],["Irland","Storbritannien"]
+],
+medium: [
+["Danmark","Norge"],["USA","Storbritannien"],["Frankrig","Italien"],
+["Tyskland","Østrig"],["Spanien","Portugal"],["Sverige","Finland"],
+["Brasilien","Portugal"],["Japan","Sydkorea"],["Indien","Bangladesh"],
+["Mexico","Colombia"],["Australien","Canada"],["Egypten","Tunesien"],
+["Tyrkiet","Cypern"],["Polen","Slovakiet"],["Ukraine","Hviderusland"],
+["Thailand","Malaysia"],["Indonesien","Malaysia"],["Schweiz","Liechtenstein"],
+["Belgien","Frankrig"],["Irland","Island"]
+],
+hard: [
+["Danmark","København"],["USA","Washington"],["Frankrig","Paris"],
+["Tyskland","Berlin"],["Spanien","Madrid"],["Italien","Rom"],
+["Norge","Oslo"],["Sverige","Stockholm"],["Finland","Helsinki"],
+["Brasilien","Brasilia"],["Japan","Tokyo"],["Kina","Beijing"],
+["Indien","Delhi"],["Mexico","Mexico City"],["Australien","Canberra"],
+["Egypten","Cairo"],["Tyrkiet","Ankara"],["Polen","Warszawa"],
+["Belgien","Bruxelles"],["Schweiz","Bern"]
+]
+},
+
+// 🐶 DYR (ekstra variation)
+animals2: {
+easy: [
+["Hund","Kat"],["Løve","Tiger"],["Elefant","Næsehorn"],
+["Hest","Ko"],["Haj","Delfin"],["Slange","Firben"],
+["Ørn","Høg"],["Frø","Padde"],["Bjørn","Ulve"],
+["Ræv","Hund"],["Gris","Ko"],["Kylling","And"],
+["Ged","Får"],["Hjort","Elg"],["Hval","Haj"],
+["Pingvin","Fugl"],["Myre","Bi"],["Edderkop","Myre"],
+["Fisk","Haj"],["Kat","Løve"]
+],
+medium: [
+["Hund","Ulve"],["Løve","Leopard"],["Elefant","Mammut"],
+["Hest","Æsel"],["Haj","Hval"],["Slange","Python"],
+["Ørn","Falk"],["Frø","Salamander"],["Bjørn","Grizzly"],
+["Ræv","Ulve"],["Gris","Vildsvin"],["Kylling","Kalkun"],
+["Ged","Vædder"],["Hjort","Rensdyr"],["Hval","Spækhugger"],
+["Pingvin","Sæl"],["Myre","Termit"],["Edderkop","Skorpion"],
+["Fisk","Laks"],["Kat","Tiger"]
+],
+hard: [
+["Hund","Hvalp"],["Kat","Killing"],["Løve","Unge"],
+["Elefant","Kalv"],["Hest","Føl"],["Haj","Hvidhaj"],
+["Slange","Kobra"],["Ørn","Guldørn"],["Bjørn","Isbjørn"],
+["Ræv","Polarræv"],["Gris","Pattegris"],["Kylling","Høne"],
+["Ged","Kid"],["Hjort","Kalv"],["Hval","Blåhval"],
+["Pingvin","Kejserpingvin"],["Myre","Dronning"],
+["Edderkop","Black Widow"],["Fisk","Tun"],["Ulve","Alpha"]
+]
+},
+
+// 🏀 SPORT
+sports: {
+easy: [
+["Fodbold","Basketball"],["Tennis","Badminton"],
+["Håndbold","Volleyball"],["Svømning","Løb"],
+["Cykling","Løb"],["Golf","Tennis"],
+["Ishockey","Fodbold"],["Baseball","Cricket"],
+["Rugby","Fodbold"],["Boksning","MMA"],
+["Fitness","Løb"],["Yoga","Fitness"],
+["Skate","Cykel"],["Ski","Snowboard"],
+["Surf","Svømning"],["Ridning","Cykling"],
+["Bordtennis","Tennis"],["Basket","Volleyball"],
+["Fodbold","Håndbold"],["Løb","Sprint"]
+],
+medium: [
+["Fodbold","Futsal"],["Basket","Streetbasket"],
+["Tennis","Padel"],["Badminton","Squash"],
+["Håndbold","Beach håndbold"],["Svømning","Dykning"],
+["Cykling","MTB"],["Golf","Minigolf"],
+["Ishockey","Floorball"],["Baseball","Softball"],
+["Rugby","American Football"],["Boksning","Kickboxing"],
+["Fitness","Crossfit"],["Yoga","Pilates"],
+["Skate","Longboard"],["Ski","Langrend"],
+["Surf","Kitesurf"],["Ridning","Dressur"],
+["Bordtennis","Pingpong"],["Volleyball","Beach volley"]
+],
+hard: [
+["Fodbold","Offside"],["Basket","3-point"],
+["Tennis","Grand Slam"],["Badminton","Smash"],
+["Håndbold","7-meter"],["Svømning","Butterfly"],
+["Cykling","Tour de France"],["Golf","Hole in one"],
+["Ishockey","Powerplay"],["Baseball","Home run"],
+["Rugby","Try"],["Boksning","KO"],
+["Fitness","PR"],["Yoga","Namaste"],
+["Skate","Kickflip"],["Ski","Slalom"],
+["Surf","Wave"],["Ridning","Galop"],
+["Bordtennis","Topspin"],["Volleyball","Spike"]
+]
+},
+
+// 🍔 MAD
+food: {
+easy: [
+["Pizza","Burger"],["Pasta","Ris"],["Brød","Toast"],
+["Kage","Is"],["Chips","Popcorn"],["Chokolade","Slik"],
+["Æble","Banan"],["Appelsin","Citron"],["Mælk","Juice"],
+["Vand","Sodavand"],["Hotdog","Burger"],["Fries","Chips"],
+["Kylling","Oksekød"],["Fisk","Kylling"],["Salat","Grøntsager"],
+["Æg","Bacon"],["Ost","Smør"],["Yoghurt","Skyr"],
+["Pandekager","Vafler"],["Donut","Kage"]
+],
+medium: [
+["Pizza","Calzone"],["Pasta","Spaghetti"],
+["Brød","Baguette"],["Kage","Brownie"],
+["Chips","Nachos"],["Chokolade","Mørk chokolade"],
+["Æble","Pære"],["Appelsin","Mandarin"],
+["Mælk","Oat milk"],["Vand","Mineralvand"],
+["Burger","Cheeseburger"],["Fries","Curly fries"],
+["Kylling","Tyrkisk kylling"],["Fisk","Laks"],
+["Salat","Cæsar salat"],["Æg","Spejlæg"],
+["Ost","Cheddar"],["Yoghurt","Græsk yoghurt"],
+["Pandekager","Crepes"],["Donut","Glazed"]
+],
+hard: [
+["Pizza","Margherita"],["Pasta","Carbonara"],
+["Brød","Surdej"],["Kage","Red velvet"],
+["Chips","Salted"],["Chokolade","70%"],
+["Æble","Granny Smith"],["Appelsin","Blodappelsin"],
+["Mælk","Letmælk"],["Vand","Sparkling"],
+["Burger","Big Mac"],["Fries","McFries"],
+["Kylling","Nuggets"],["Fisk","Sushi"],
+["Salat","Cobb"],["Æg","Pocheret"],
+["Ost","Brie"],["Yoghurt","Protein"],
+["Pandekager","American"],["Donut","Filled"]
+]
+},
+
+// 💼 JOBS
+jobs: {
+easy: [
+["Lærer","Elev"],["Læge","Sygeplejerske"],
+["Politi","Vagt"],["Brandmand","Redder"],
+["Kok","Tjener"],["Chauffør","Pilot"],
+["Ingeniør","Programmer"],["Designer","Arkitekt"],
+["Butik","Kassemedarbejder"],["Chef","Ansat"],
+["Træner","Spiller"],["Dommer","Spiller"],
+["Frisør","Makeup artist"],["Mekaniker","Elektriker"],
+["Landmand","Gartner"],["Postbud","Bud"],
+["Soldat","Politi"],["Advokat","Dommer"],
+["Journalist","Fotograf"],["Musiker","Sanger"]
+],
+medium: [
+["Lærer","Professor"],["Læge","Kirurg"],
+["Politi","Detektiv"],["Brandmand","Paramedic"],
+["Kok","Souschef"],["Pilot","Kaptajn"],
+["Ingeniør","Civilingeniør"],["Designer","UX designer"],
+["Butik","Manager"],["Chef","Direktør"],
+["Træner","Coach"],["Dommer","Referee"],
+["Frisør","Stylist"],["Mekaniker","Tekniker"],
+["Landmand","Agronom"],["Postbud","Courier"],
+["Soldat","Officer"],["Advokat","Forsvarer"],
+["Journalist","Reporter"],["Musiker","Producer"]
+],
+hard: [
+["Lærer","Cand.mag"],["Læge","Speciallæge"],
+["Politi","Efterforsker"],["Brandmand","Røgdykker"],
+["Kok","Michelin kok"],["Pilot","Co-pilot"],
+["Ingeniør","Software engineer"],["Designer","UI designer"],
+["Butik","Retail manager"],["Chef","CEO"],
+["Træner","Head coach"],["Dommer","VAR"],
+["Frisør","Barber"],["Mekaniker","Auto tekniker"],
+["Landmand","Økolog"],["Postbud","Logistik"],
+["Soldat","General"],["Advokat","Anklager"],
+["Journalist","Korrespondent"],["Musiker","Komponist"]
+]
+}
+};
+// RANDOM
+function generateRandomPairs(count) {
+  let fallback = [["Test","Test2"],["A","B"],["X","Y"]];
+  let result = [];
+  for (let i = 0; i < count; i++) {
+    result.push(fallback[Math.floor(Math.random()*fallback.length)]);
+  }
+  return result;
+}
+
+// UI
+function renderPlayers() {
+  let list = document.getElementById("playerList");
+  list.innerHTML = "";
+  players.forEach(p => list.innerHTML += "<li>" + p.name + "</li>");
+}
+renderPlayers();
+
+function addPlayer() {
+  let name = document.getElementById("playerName").value;
+  if (name) {
+    players.push({ name });
+    localStorage.setItem("players", JSON.stringify(players));
+    renderPlayers();
+    document.getElementById("playerName").value = "";
+  }
+}
+
+function clearPlayers() {
+  localStorage.removeItem("players");
+  players = [];
+  renderPlayers();
+}
+
+function autoImposters() {
+  let n = players.length;
+  let val = n <= 4 ? 1 : n <= 7 ? 2 : 3;
+  document.getElementById("imposterInput").value = val;
+}
+
+// START GAME
+function startGame() {
+
+  if (players.length < 3) return alert("Minimum 3 spillere");
+
+  let imposterCount = parseInt(document.getElementById("imposterInput").value);
+  if (!imposterCount || imposterCount >= players.length) {
+    return alert("Ugyldigt antal impostere");
+  }
+
+  let selected = Array.from(document.querySelectorAll("input[type=checkbox]:checked"))
+                      .map(el => el.value);
+
+  if (selected.length === 0) return alert("Vælg kategori");
+
+  let diff = document.getElementById("difficulty").value;
+  let diffKey = diff == 1 ? "easy" : diff == 2 ? "medium" : "hard";
+
+  let pool = [];
+
+  selected.forEach(cat => {
+
+    if (cat === "random") {
+      Object.keys(wordDB).forEach(key => {
+        pool = pool.concat(wordDB[key][diffKey]);
+      });
+    }
+
+    else if (cat === "randomHard") {
+      Object.keys(wordDB).forEach(key => {
+        pool = pool.concat(wordDB[key]["hard"]);
+      });
+    }
+
+    else if (wordDB[cat]) {
+      pool = pool.concat(wordDB[cat][diffKey]);
+    }
+
+  });
+
+  if (pool.length === 0) return alert("Ingen ord fundet");
+
+  chosenPair = pool[Math.floor(Math.random()*pool.length)];
+
+  imposters = [];
+  while (imposters.length < imposterCount) {
+    let r = Math.floor(Math.random()*players.length);
+    if (!imposters.includes(r)) imposters.push(r);
+  }
+
+  players.forEach((p,i)=>{
+    p.word = imposters.includes(i) ? chosenPair[1] : chosenPair[0];
+  });
+
+  revealIndex = 0;
+  switchScreen("setup","reveal");
+  showWord();
+}
+
+// GAME FLOW
+function showWord() {
+  let p = players[revealIndex];
+
+  document.getElementById("currentPlayer").innerText = p.name;
+  document.getElementById("secretWord").innerText = p.word;
+
+  document.getElementById("secretWord").classList.add("hidden");
+  document.getElementById("revealBtn").classList.remove("hidden");
+  document.getElementById("nextBtn").classList.add("hidden");
+}
+
+// 👇 HER
+function revealWord() {
+  document.getElementById("secretWord").classList.remove("hidden");
+  document.getElementById("revealBtn").classList.add("hidden");
+  document.getElementById("nextBtn").classList.remove("hidden");
+}
+function nextPlayer() {
+  revealIndex++;
+  if (revealIndex < players.length) showWord();
+  else switchScreen("reveal","game");
+}
+
+function startVoting() {
+  switchScreen("game","voting");
+
+  let container = document.getElementById("voteButtons");
+  container.innerHTML = "";
+
+  players.forEach((p,i)=>{
+    let btn = document.createElement("button");
+    btn.innerText = p.name;
+    btn.onclick = ()=>vote(i);
+    container.appendChild(btn);
+  });
+}
+
+function vote(i) {
+  switchScreen("voting","result");
+
+  document.getElementById("resultText").innerText =
+    imposters.includes(i) ? "Rigtigt!" : "Forkert!";
+
+  document.getElementById("imposterList").innerText =
+    "Impostere var: " + imposters.map(i => players[i].name).join(", ");
+}
+
+function switchScreen(hide, show) {
+  document.getElementById(hide).classList.add("hidden");
+  document.getElementById(show).classList.remove("hidden");
+}
+
+</script>
+
+</body>
+</html>
